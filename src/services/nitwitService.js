@@ -7,9 +7,19 @@ import {
   generateNitwitReply
 } from './groqService.js';
 
-let lastGlobalReplyAt = 0;
+let messagesSinceLastReply = 0;
 
-const lastUserReplyAt = new Map();
+function shouldAutoReply() {
+  messagesSinceLastReply++;
+
+  // Reply every 2 messages
+  if (messagesSinceLastReply >= 2) {
+    messagesSinceLastReply = 0;
+    return true;
+  }
+
+  return false;
+}
 
 function randomItem(items) {
   return items[
@@ -23,41 +33,8 @@ export function getMentionReply() {
   );
 }
 
-function canAutoReply(userId) {
-  const now = Date.now();
-
-  if (
-    now - lastGlobalReplyAt <
-    config.nitwit.globalCooldownMs
-  ) {
-    return false;
-  }
-
-  const lastUser =
-    lastUserReplyAt.get(userId) || 0;
-
-  if (
-    now - lastUser <
-    config.nitwit.userCooldownMs
-  ) {
-    return false;
-  }
-
-  return (
-    Math.random() <
-    config.nitwit.autoReplyChance
-  );
-}
-
-function markAutoReply(userId) {
-  const now = Date.now();
-
-  lastGlobalReplyAt = now;
-  lastUserReplyAt.set(userId, now);
-}
-
 export async function maybeAutoReply(message) {
-  if (!canAutoReply(message.author.id)) {
+  if (!shouldAutoReply()) {
     return null;
   }
 
@@ -67,38 +44,70 @@ export async function maybeAutoReply(message) {
   );
 
   if (!context.length) {
-    console.log('Nitwit: no message history found.');
+    console.log(
+      'Nitwit: no conversation history found.'
+    );
+
     return null;
   }
 
   console.log(
-    `Nitwit automatic reply using ${context.length} message(s).`
+    `Nitwit auto-reply: using ${context.length} message(s).`
   );
 
-  const reply = await generateNitwitReply(context);
+  try {
+    const reply = await generateNitwitReply(
+      context
+    );
 
-  if (!reply) {
+    if (!reply) {
+      return null;
+    }
+
+    return reply;
+
+  } catch (error) {
+    console.error(
+      'Nitwit auto-reply error:',
+      error
+    );
+
     return null;
   }
-
-  markAutoReply(message.author.id);
-
-  return reply;
 }
 
-export async function forceReplyToCurrentContext(channel) {
+export async function forceReplyToCurrentContext(
+  channel
+) {
   const context = getRecentMessages(
     channel.id,
     config.nitwit.contextMessages
   );
 
   console.log(
-    `Nitwit /nitwit found ${context.length} message(s).`
+    `Nitwit /nitwit: found ${context.length} message(s).`
   );
 
   if (!context.length) {
     return 'I walked in and forgot what everyone was talking about.';
   }
 
-  return generateNitwitReply(context);
+  try {
+    const reply = await generateNitwitReply(
+      context
+    );
+
+    return (
+      reply ||
+      'My brain is buffering.'
+    );
+
+  } catch (error) {
+    console.error(
+      'Nitwit /nitwit error:',
+      error
+    );
+
+    return 'Something exploded in my brain.';
+  }
 }
