@@ -23,7 +23,7 @@ export default {
     autoReplyChance: numberEnv('NITWIT_AUTO_REPLY_CHANCE', 0.08),
     globalCooldownMs: numberEnv('NITWIT_GLOBAL_COOLDOWN_MS', 180000),
     userCooldownMs: numberEnv('NITWIT_USER_COOLDOWN_MS', 900000),
-    contextMessages: numberEnv('NITWIT_CONTEXT_MESSAGES', 15),
+    contextMessages: numberEnv('NITWIT_CONTEXT_MESSAGES', 4),
     maxOutputTokens: numberEnv('NITWIT_MAX_OUTPUT_TOKENS', 80),
 
     mentionReplies: [
