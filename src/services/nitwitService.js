@@ -1,16 +1,26 @@
 import config from '../config/config.js';
-import { getRecentMessages } from './conversationService.js';
-import { generateNitwitReply } from './groqService.js';
+import {
+  getRecentMessages
+} from './conversationService.js';
+
+import {
+  generateNitwitReply
+} from './groqService.js';
 
 let lastGlobalReplyAt = 0;
+
 const lastUserReplyAt = new Map();
 
 function randomItem(items) {
-  return items[Math.floor(Math.random() * items.length)];
+  return items[
+    Math.floor(Math.random() * items.length)
+  ];
 }
 
 export function getMentionReply() {
-  return randomItem(config.nitwit.mentionReplies);
+  return randomItem(
+    config.nitwit.mentionReplies
+  );
 }
 
 function canAutoReply(userId) {
@@ -33,7 +43,10 @@ function canAutoReply(userId) {
     return false;
   }
 
-  return Math.random() < config.nitwit.autoReplyChance;
+  return (
+    Math.random() <
+    config.nitwit.autoReplyChance
+  );
 }
 
 function markAutoReply(userId) {
@@ -48,14 +61,19 @@ export async function maybeAutoReply(message) {
     return null;
   }
 
-  const context = await getRecentMessages(
+  const context = getRecentMessages(
     message.channelId,
     config.nitwit.contextMessages
   );
 
   if (!context.length) {
+    console.log('Nitwit: no message history found.');
     return null;
   }
+
+  console.log(
+    `Nitwit automatic reply using ${context.length} message(s).`
+  );
 
   const reply = await generateNitwitReply(context);
 
@@ -68,17 +86,19 @@ export async function maybeAutoReply(message) {
   return reply;
 }
 
-export async function forceReplyToCurrentContext(message) {
-  const context = await getRecentMessages(
-    message.channelId,
+export async function forceReplyToCurrentContext(channel) {
+  const context = getRecentMessages(
+    channel.id,
     config.nitwit.contextMessages
   );
 
+  console.log(
+    `Nitwit /nitwit found ${context.length} message(s).`
+  );
+
   if (!context.length) {
-    return null;
+    return 'I walked in and forgot what everyone was talking about.';
   }
 
-  return generateNitwitReply(context, {
-    forceReply: true
-  });
+  return generateNitwitReply(context);
 }
