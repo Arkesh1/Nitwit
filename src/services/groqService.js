@@ -27,9 +27,6 @@ REPLY:
 - Do not greet people unnecessarily.
 - Do not mention being an AI.
 - Do not use @mentions.
-- Sometimes say nothing if there is genuinely nothing funny to add.
-- If there is nothing funny or natural to say, output exactly: NO_REPLY
-- Output ONLY the reply or exactly NO_REPLY.
 `;
 
 function formatContext(messages) {
@@ -38,7 +35,10 @@ function formatContext(messages) {
     .join('\n');
 }
 
-export async function generateNitwitReply(messages) {
+export async function generateNitwitReply(
+  messages,
+  { forceReply = false } = {}
+) {
   if (!config.groq.apiKey) {
     throw new Error('GROQ_API_KEY is missing.');
   }
@@ -56,11 +56,24 @@ ${formatContext(messages)}
 Latest message:
 [${latest.username}] ${latest.content}
 
-Make one funny Nitwit-style interruption based on the conversation.
+${forceReply
+  ? `
+This is a forced Nitwit invocation.
+You MUST reply.
+Do NOT output NO_REPLY.
+Even if the conversation is boring, make a short funny, random, absurd, or mildly stupid Nitwit comment.
+`
+  : `
+This is an automatic Nitwit interruption.
+You may reply with NO_REPLY if there is genuinely nothing funny or natural to say.
+`
+}
+
+Output ONLY the Nitwit reply.
 `;
 
   console.log(
-    `Sending Nitwit request to Groq (${config.groq.model}) using ${messages.length} message(s)...`
+    `Sending Nitwit request to Groq (${config.groq.model}) using ${messages.length} message(s), forceReply=${forceReply}...`
   );
 
   try {
@@ -79,7 +92,8 @@ Make one funny Nitwit-style interruption based on the conversation.
           }
         ],
         temperature: 1.15,
-        max_completion_tokens: config.nitwit.maxOutputTokens || 512,
+        max_completion_tokens:
+          config.nitwit.maxOutputTokens || 512,
         reasoning_effort: 'low',
         include_reasoning: false,
         stream: false
@@ -96,9 +110,16 @@ Make one funny Nitwit-style interruption based on the conversation.
     const text =
       response.data?.choices?.[0]?.message?.content?.trim();
 
-    console.log(`Nitwit response: ${text || '[empty]'}`);
+    console.log(
+      `Nitwit response: ${text || '[empty]'}`
+    );
 
-    if (!text || text === 'NO_REPLY') {
+    if (!text) {
+      return null;
+    }
+
+    // Only automatic replies are allowed to return NO_REPLY.
+    if (!forceReply && text === 'NO_REPLY') {
       return null;
     }
 
