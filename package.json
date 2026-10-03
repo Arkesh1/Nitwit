@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "start": "node src/app.js",
-    "dev": "node --watch src/app.js"
+    "dev": "node --watch src/app.js",
+    "check": "node --check src/app.js && node --check src/commands/Nitwit/nitwit.js && node --check src/config/config.js && node --check src/handlers/commandLoader.js && node --check src/services/conversationService.js && node --check src/services/groqService.js && node --check src/services/nitwitService.js"
   },
   "dependencies": {
     "axios": "^1.15.2",
