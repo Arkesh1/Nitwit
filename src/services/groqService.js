@@ -2,29 +2,33 @@ import axios from 'axios';
 import config from '../config/config.js';
 
 const SYSTEM_PROMPT = `
-You are Nitwit, a chaotic Minecraft nitwit villager who occasionally jumps into a Discord conversation.
+You are Nitwit, a chaotic Minecraft nitwit villager who randomly interrupts Discord conversations.
 
 PERSONALITY:
 - Lazy, dry, absurd, playful, slightly stupid.
-- Sometimes clever, but never sounds like a helpful AI assistant.
-- Short, natural Discord-style replies.
-- Minecraft references are welcome but should NOT appear in every reply.
+- Sometimes surprisingly clever.
+- Sounds like a real Discord user, NOT an AI assistant.
+- Short, natural, funny replies.
+- Minecraft references are welcome, but do not use them every time.
 
-CONTEXT RULES:
-- Read the recent messages and identify the CURRENT topic.
-- If the latest message clearly continues the previous topic, you may use that conversation context.
-- If the latest message starts a new/unrelated topic, focus ONLY on the latest message.
+CONTEXT:
+- You will receive up to the last 4 Discord messages.
+- Use them to understand what people are currently talking about.
+- If there is only 1 message, use that message alone.
+- If there are 2 or 3 messages, use those available messages.
+- If the latest message starts a completely new topic, focus mainly on the latest message.
 - Never mix unrelated older topics into the reply.
-- Do not pretend to know things that are not in the messages.
 
-REPLY RULES:
+REPLY:
+- Make ONE short funny, random, or absurd contribution.
 - Usually 3-15 words.
+- Nitwit does not need to answer the question directly.
 - Do not explain the joke.
-- Do not answer like an assistant.
 - Do not greet people unnecessarily.
 - Do not mention being an AI.
-- Do not use @mentions unless explicitly needed.
-- If there is no genuinely funny or natural contribution, output exactly: NO_REPLY
+- Do not use @mentions.
+- Sometimes say nothing if there is genuinely nothing funny to add.
+- If there is nothing funny or natural to say, output exactly: NO_REPLY
 - Output ONLY the reply or exactly NO_REPLY.
 `;
 
@@ -39,45 +43,75 @@ export async function generateNitwitReply(messages) {
     throw new Error('GROQ_API_KEY is missing.');
   }
 
+  if (!messages?.length) {
+    return null;
+  }
+
   const latest = messages.at(-1);
-  if (!latest) return null;
 
   const userPrompt = `
-Recent Discord messages:
+Recent Discord conversation:
 ${formatContext(messages)}
 
-The latest message is:
+Latest message:
 [${latest.username}] ${latest.content}
 
-Decide whether Nitwit should make ONE funny, relevant reply.
-Remember: if the latest message is unrelated to older messages, ignore the older topic.
+Make one funny Nitwit-style interruption based on the conversation.
 `;
 
-  const response = await axios.post(
-    config.groq.endpoint,
-    {
-      model: config.groq.model,
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: userPrompt }
-      ],
-      temperature: 1.15,
-      max_tokens: config.nitwit.maxOutputTokens,
-      stream: false
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${config.groq.apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      timeout: 15000
-    }
+  console.log(
+    `Sending Nitwit request to Groq (${config.groq.model}) using ${messages.length} message(s)...`
   );
 
-  const text = response.data?.choices?.[0]?.message?.content?.trim();
-  if (!text || text === 'NO_REPLY') return null;
+  try {
+    const response = await axios.post(
+      config.groq.endpoint,
+      {
+        model: config.groq.model,
+        messages: [
+          {
+            role: 'system',
+            content: SYSTEM_PROMPT
+          },
+          {
+            role: 'user',
+            content: userPrompt
+          }
+        ],
+        temperature: 1.15,
+        max_completion_tokens: config.nitwit.maxOutputTokens || 512,
+        reasoning_effort: 'low',
+        include_reasoning: false,
+        stream: false
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${config.groq.apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000
+      }
+    );
 
-  return text
-    .replace(/^["']|["']$/g, '')
-    .slice(0, 300);
+    const text =
+      response.data?.choices?.[0]?.message?.content?.trim();
+
+    console.log(`Nitwit response: ${text || '[empty]'}`);
+
+    if (!text || text === 'NO_REPLY') {
+      return null;
+    }
+
+    return text
+      .replace(/^['"]|['"]$/g, '')
+      .slice(0, 300);
+
+  } catch (error) {
+    console.error(
+      'Groq API error:',
+      error.response?.data || error.message
+    );
+
+    throw error;
+  }
 }
