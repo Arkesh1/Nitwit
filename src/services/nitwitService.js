@@ -16,12 +16,20 @@ export function getMentionReply() {
 function canAutoReply(userId) {
   const now = Date.now();
 
-  if (now - lastGlobalReplyAt < config.nitwit.globalCooldownMs) {
+  if (
+    now - lastGlobalReplyAt <
+    config.nitwit.globalCooldownMs
+  ) {
     return false;
   }
 
-  const lastUser = lastUserReplyAt.get(userId) || 0;
-  if (now - lastUser < config.nitwit.userCooldownMs) {
+  const lastUser =
+    lastUserReplyAt.get(userId) || 0;
+
+  if (
+    now - lastUser <
+    config.nitwit.userCooldownMs
+  ) {
     return false;
   }
 
@@ -30,34 +38,47 @@ function canAutoReply(userId) {
 
 function markAutoReply(userId) {
   const now = Date.now();
+
   lastGlobalReplyAt = now;
   lastUserReplyAt.set(userId, now);
 }
 
 export async function maybeAutoReply(message) {
-  if (!canAutoReply(message.author.id)) return null;
+  if (!canAutoReply(message.author.id)) {
+    return null;
+  }
 
-  const context = getRecentMessages(
+  const context = await getRecentMessages(
     message.channelId,
     config.nitwit.contextMessages
   );
 
-  if (!context.length) return null;
+  if (!context.length) {
+    return null;
+  }
 
   const reply = await generateNitwitReply(context);
-  if (!reply) return null;
+
+  if (!reply) {
+    return null;
+  }
 
   markAutoReply(message.author.id);
+
   return reply;
 }
 
 export async function forceReplyToCurrentContext(message) {
-  const context = getRecentMessages(
+  const context = await getRecentMessages(
     message.channelId,
     config.nitwit.contextMessages
   );
 
-  if (!context.length) return null;
+  if (!context.length) {
+    return null;
+  }
 
-  return generateNitwitReply(context);
+  return generateNitwitReply(context, {
+    forceReply: true
+  });
 }
