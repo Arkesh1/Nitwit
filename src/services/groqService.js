@@ -61,9 +61,11 @@ Remember: if the latest message is unrelated to older messages, ignore the older
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: userPrompt }
       ],
-      temperature: 1.15,
-      max_tokens: config.nitwit.maxOutputTokens,
-      stream: false
+temperature: 1.15,
+max_completion_tokens: 150,
+reasoning_effort: 'low',
+include_reasoning: false,
+stream: false
     },
     {
       headers: {
