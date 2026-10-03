@@ -28,7 +28,7 @@ export async function execute(interaction) {
     );
 
   } catch (error) {
-    console.error('Nitwit command error:', error);
+    console.error('Nitwit command error:',error);
 
     await interaction.editReply(
       'Something exploded in my brain.'
