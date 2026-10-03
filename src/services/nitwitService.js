@@ -7,18 +7,54 @@ import {
   generateNitwitReply
 } from './groqService.js';
 
-let messagesSinceLastReply = 0;
+const MIN_MESSAGES = 5;
+const MAX_MESSAGES = 15;
 
-function shouldAutoReply() {
-  messagesSinceLastReply++;
+// Track each channel separately
+const channelCounters = new Map();
 
-  // Reply every 2 messages
-  if (messagesSinceLastReply >= 2) {
-    messagesSinceLastReply = 0;
-    return true;
+function randomMessageTarget() {
+  return (
+    Math.floor(
+      Math.random() *
+        (MAX_MESSAGES - MIN_MESSAGES + 1)
+    ) + MIN_MESSAGES
+  );
+}
+
+function getChannelState(channelId) {
+  if (!channelCounters.has(channelId)) {
+    channelCounters.set(channelId, {
+      count: 0,
+      target: randomMessageTarget()
+    });
   }
 
-  return false;
+  return channelCounters.get(channelId);
+}
+
+function shouldAutoReply(channelId) {
+  const state = getChannelState(channelId);
+
+  state.count++;
+
+  console.log(
+    `Nitwit counter [${channelId}]: ${state.count}/${state.target}`
+  );
+
+  if (state.count < state.target) {
+    return false;
+  }
+
+  // Reset for the next random interval
+  state.count = 0;
+  state.target = randomMessageTarget();
+
+  console.log(
+    `Nitwit will reply again after ${state.target} messages.`
+  );
+
+  return true;
 }
 
 function randomItem(items) {
@@ -34,7 +70,7 @@ export function getMentionReply() {
 }
 
 export async function maybeAutoReply(message) {
-  if (!shouldAutoReply()) {
+  if (!shouldAutoReply(message.channelId)) {
     return null;
   }
 
@@ -56,9 +92,8 @@ export async function maybeAutoReply(message) {
   );
 
   try {
-    const reply = await generateNitwitReply(
-      context
-    );
+    const reply =
+      await generateNitwitReply(context);
 
     if (!reply) {
       return null;
@@ -93,9 +128,8 @@ export async function forceReplyToCurrentContext(
   }
 
   try {
-    const reply = await generateNitwitReply(
-      context
-    );
+    const reply =
+      await generateNitwitReply(context);
 
     return (
       reply ||
