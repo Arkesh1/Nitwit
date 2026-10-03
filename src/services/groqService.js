@@ -20,13 +20,16 @@ CONTEXT:
 - Never mix unrelated older topics into the reply.
 
 REPLY:
-- Make ONE short funny, random, or absurd contribution.
+- ALWAYS generate exactly ONE reply.
 - Usually 3-15 words.
+- Make it funny, random, absurd, sarcastic, or mildly stupid.
 - Nitwit does not need to answer the question directly.
 - Do not explain the joke.
 - Do not greet people unnecessarily.
 - Do not mention being an AI.
 - Do not use @mentions.
+- Do not refuse to reply.
+- Never output an empty response.
 `;
 
 function formatContext(messages) {
@@ -35,10 +38,7 @@ function formatContext(messages) {
     .join('\n');
 }
 
-export async function generateNitwitReply(
-  messages,
-  { forceReply = false } = {}
-) {
+export async function generateNitwitReply(messages) {
   if (!config.groq.apiKey) {
     throw new Error('GROQ_API_KEY is missing.');
   }
@@ -56,24 +56,20 @@ ${formatContext(messages)}
 Latest message:
 [${latest.username}] ${latest.content}
 
-${forceReply
-  ? `
-This is a forced Nitwit invocation.
-You MUST reply.
-Do NOT output NO_REPLY.
-Even if the conversation is boring, make a short funny, random, absurd, or mildly stupid Nitwit comment.
-`
-  : `
-This is an automatic Nitwit interruption.
-You may reply with NO_REPLY if there is genuinely nothing funny or natural to say.
-`
-}
+Generate ONE short Nitwit-style reply to the conversation.
 
-Output ONLY the Nitwit reply.
+Remember:
+- ALWAYS reply.
+- Be funny, random, absurd, or mildly stupid.
+- Keep it natural for Discord.
+- Usually 3-15 words.
+- Do not answer like a normal AI assistant.
+
+Output ONLY the reply.
 `;
 
   console.log(
-    `Sending Nitwit request to Groq (${config.groq.model}) using ${messages.length} message(s), forceReply=${forceReply}...`
+    `Sending Nitwit request to Groq (${config.groq.model}) using ${messages.length} message(s)...`
   );
 
   try {
@@ -81,6 +77,7 @@ Output ONLY the Nitwit reply.
       config.groq.endpoint,
       {
         model: config.groq.model,
+
         messages: [
           {
             role: 'system',
@@ -91,18 +88,22 @@ Output ONLY the Nitwit reply.
             content: userPrompt
           }
         ],
+
         temperature: 1.15,
         max_completion_tokens:
           config.nitwit.maxOutputTokens || 512,
+
         reasoning_effort: 'low',
         include_reasoning: false,
         stream: false
       },
+
       {
         headers: {
           Authorization: `Bearer ${config.groq.apiKey}`,
           'Content-Type': 'application/json'
         },
+
         timeout: 30000
       }
     );
@@ -115,12 +116,7 @@ Output ONLY the Nitwit reply.
     );
 
     if (!text) {
-      return null;
-    }
-
-    // Only automatic replies are allowed to return NO_REPLY.
-    if (!forceReply && text === 'NO_REPLY') {
-      return null;
+      return 'My brain is buffering.';
     }
 
     return text
