@@ -53,6 +53,17 @@ if (!config.groq.apiKey) {
 
 client.once(Events.ClientReady, async readyClient => {
   console.log(`Nitwit online as ${readyClient.user.tag}`);
+    readyClient.user.setPresence({
+    status: 'online',
+    activities: [
+      {
+        name: 'Custom Status',
+        state: 'Powered By Railway.com',
+        type: 4
+      }
+    ]
+  });
+
 
   try {
     await registerCommands(client, config);
