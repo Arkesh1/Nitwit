@@ -8,7 +8,7 @@ import {
 } from './groqService.js';
 
 const MIN_MESSAGES = 5;
-const MAX_MESSAGES = 15;
+const MAX_MESSAGES = 10;
 
 // Track each channel separately
 const channelCounters = new Map();
