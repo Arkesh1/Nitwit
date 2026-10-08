@@ -100,21 +100,23 @@ client.on(Events.InteractionCreate, async interaction => {
 client.on(Events.MessageCreate, async message => {
   if (!message.guild || message.author.bot) return;
 
-  const isNitwitMentioned = message.mentions.users.has(client.user.id) ||
+const isNitwitMentioned =
+  message.mentions.users.has(client.user.id) ||
   /\bnitwit\b/i.test(message.content);
 
-  // Store the message before processing so /nitwit and automatic replies
-  // can see the latest message.
-  rememberMessage(message);
+// @Nitwit or "nitwit" by name.
+if (isNitwitMentioned) {
+  const result = await replyToNitwitMention(message);
 
-  // @Nitwit is ALWAYS handled without an AI request.
-  if (isNitwitMentioned) {
-    await message.reply({
-      content: getMentionReply(),
-      allowedMentions: { repliedUser: false }
-    }).catch(error => console.error('Mention reply failed:', error));
-    return;
-  }
+  await message.reply({
+    content: result.reply,
+    allowedMentions: { repliedUser: false }
+  }).catch(error =>
+    console.error('Mention reply failed:', error)
+  );
+
+  return;
+}
 
   // Automatic behavior is limited to the configured channel.
   if (
