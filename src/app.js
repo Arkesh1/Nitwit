@@ -15,7 +15,7 @@ import {
   getRecentMessages
 } from './services/conversationService.js';
 import {
-  getMentionReply,
+  replyToNitwitMention,
   maybeAutoReply
 } from './services/nitwitService.js';
 
