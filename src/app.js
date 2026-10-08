@@ -100,7 +100,8 @@ client.on(Events.InteractionCreate, async interaction => {
 client.on(Events.MessageCreate, async message => {
   if (!message.guild || message.author.bot) return;
 
-  const isNitwitMentioned = message.mentions.users.has(client.user.id);
+  const isNitwitMentioned = message.mentions.users.has(client.user.id) ||
+  /\bnitwit\b/i.test(message.content);
 
   // Store the message before processing so /nitwit and automatic replies
   // can see the latest message.
