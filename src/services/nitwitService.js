@@ -69,6 +69,19 @@ export function getMentionReply() {
   );
 }
 
+export function isNitwitNameTrigger(message, client) {
+  const content = message.content?.toLowerCase() || '';
+
+  // Actual @Nitwit mention
+  const isMentioned =
+    message.mentions?.users?.has(client.user.id);
+
+  // "nitwit" written without @
+  const usesName = /\bnitwit\b/i.test(content);
+
+  return isMentioned || usesName;
+}
+
 export async function maybeAutoReply(message) {
   if (!shouldAutoReply(message.channelId)) {
     return null;
