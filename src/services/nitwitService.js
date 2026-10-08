@@ -205,54 +205,29 @@ export async function replyToNitwitMention(
   message
 ) {
   try {
-    const allMessages =
+    const context =
       getNitwitContext(
         message.channelId,
         3
       );
 
     console.log(
-      `Nitwit mention: found ${allMessages.length} recent message(s).`
+      `Nitwit AI: found ${context.length} recent message(s).`
     );
 
-    // Need at least 2 messages so Nitwit has
-    // an actual conversation to understand.
-    if (allMessages.length < 2) {
-      console.log(
-        'Nitwit mention: not enough context, using preset reply.'
-      );
-
-      return {
-        reply: getMentionReply(),
-        usedAI: false
-      };
-    }
-
-    if (!hasUsefulContext(allMessages)) {
-      console.log(
-        'Nitwit mention: no useful context, using preset reply.'
-      );
-
-      return {
-        reply: getMentionReply(),
-        usedAI: false
-      };
-    }
-
-    console.log(
-      'Nitwit mention: useful context found, using Groq.'
-    );
-
-    const context =
-      formatContext(allMessages);
+    // Always use Groq for "nitwit" name triggers.
+    const formattedContext =
+      formatContext(context);
 
     const reply =
-      await generateNitwitReply(context);
+      await generateNitwitReply(
+        formattedContext
+      );
 
     if (!reply) {
       return {
-        reply: getMentionReply(),
-        usedAI: false
+        reply: 'My brain exploded. Try again.',
+        usedAI: true
       };
     }
 
@@ -263,13 +238,13 @@ export async function replyToNitwitMention(
 
   } catch (error) {
     console.error(
-      'Nitwit mention error:',
+      'Nitwit AI reply error:',
       error
     );
 
     return {
-      reply: getMentionReply(),
-      usedAI: false
+      reply: 'My brain is buffering...',
+      usedAI: true
     };
   }
 }
