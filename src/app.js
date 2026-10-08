@@ -11,13 +11,11 @@ import {
 import config from './config/config.js';
 import { loadCommands, registerCommands } from './handlers/commandLoader.js';
 import {
-  rememberMessage,
-  getRecentMessages
-} from './services/conversationService.js';
-import {
+  rememberNitwitMessage,
   replyToNitwitMention,
   maybeAutoReply
 } from './services/nitwitService.js';
+
 
 class NitwitClient extends Client {
   constructor() {
@@ -98,26 +96,77 @@ client.on(Events.InteractionCreate, async interaction => {
 });
 
 client.on(Events.MessageCreate, async message => {
-  if (!message.guild || message.author.bot) return;
+  if (!message.guild || message.author.bot) {
+    return;
+  }
 
-const isNitwitMentioned =
-  message.mentions.users.has(client.user.id) ||
-  /\bnitwit\b/i.test(message.content);
+  // Store every normal user message first.
+  rememberNitwitMessage(message);
 
-// @Nitwit or "nitwit" by name.
-if (isNitwitMentioned) {
-  const result = await replyToNitwitMention(message);
+  const isNitwitMentioned =
+    message.mentions.users.has(
+      client.user.id
+    ) ||
+    /\bnitwit\b/i.test(
+      message.content
+    );
 
-  await message.reply({
-    content: result.reply,
-    allowedMentions: { repliedUser: false }
-  }).catch(error =>
-    console.error('Mention reply failed:', error)
-  );
+  // @Nitwit / "nitwit" gets priority.
+  if (isNitwitMentioned) {
+    const result =
+      await replyToNitwitMention(
+        message
+      );
 
-  return;
-}
+    await message.reply({
+      content: result.reply,
+      allowedMentions: {
+        repliedUser: false
+      }
+    }).catch(error =>
+      console.error(
+        'Mention reply failed:',
+        error
+      )
+    );
 
+    return;
+  }
+
+  // Automatic behavior is limited
+  // to the configured channel.
+  if (
+    config.nitwit.channelId &&
+    message.channelId !==
+      config.nitwit.channelId
+  ) {
+    return;
+  }
+
+  try {
+    const reply =
+      await maybeAutoReply(
+        message
+      );
+
+    if (!reply) {
+      return;
+    }
+
+    await message.reply({
+      content: reply,
+      allowedMentions: {
+        repliedUser: false
+      }
+    });
+
+  } catch (error) {
+    console.error(
+      'Automatic Nitwit reply failed:',
+      error
+    );
+  }
+});
   // Automatic behavior is limited to the configured channel.
   if (
     config.nitwit.channelId &&
