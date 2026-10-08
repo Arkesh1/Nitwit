@@ -17,6 +17,7 @@ import {
 
 import {
   rememberNitwitMessage,
+  getMentionReply,
   replyToNitwitMention,
   maybeAutoReply
 } from './services/nitwitService.js';
@@ -180,7 +181,7 @@ const isNitwitMentioned =
     client.user.id
   );
 
-// @Nitwit = ALWAYS preset reply
+// @Nitwit = ALWAYS preset/default reply
 if (isNitwitMentioned) {
   await message.reply({
     content: getMentionReply(),
@@ -197,29 +198,32 @@ if (isNitwitMentioned) {
   return;
 }
 
-// Any message containing "nitwit" = AI
+// Any message containing "nitwit" = ALWAYS AI
 const isNitwitNameTrigger =
   /\bnitwit\b/i.test(
     message.content || ''
   );
 
 if (isNitwitNameTrigger) {
-  const result =
-    await replyToNitwitMention(
-      message
-    );
+  try {
+    const result =
+      await replyToNitwitMention(
+        message
+      );
 
-  await message.reply({
-    content: result.reply,
-    allowedMentions: {
-      repliedUser: false
-    }
-  }).catch(error =>
+    await message.reply({
+      content: result.reply,
+      allowedMentions: {
+        repliedUser: false
+      }
+    });
+
+  } catch (error) {
     console.error(
       'Nitwit AI reply failed:',
       error
-    )
-  );
+    );
+  }
 
   return;
 }
