@@ -1,17 +1,18 @@
 import config from '../config/config.js';
 import {
-  getRecentMessages
-} from './conversationService.js';
-
-import {
   generateNitwitReply
 } from './groqService.js';
 
 const MIN_MESSAGES = 5;
 const MAX_MESSAGES = 10;
 
-// Track each channel separately
+// Keep recent messages separately for each channel.
+const channelMessages = new Map();
+
+// Track automatic reply counters separately for each channel.
 const channelCounters = new Map();
+
+const MAX_CONTEXT_MESSAGES = 15;
 
 function randomMessageTarget() {
   return (
@@ -33,67 +34,89 @@ function getChannelState(channelId) {
   return channelCounters.get(channelId);
 }
 
-function shouldAutoReply(channelId) {
-  const state = getChannelState(channelId);
-
-  state.count++;
-
-  console.log(
-    `Nitwit counter [${channelId}]: ${state.count}/${state.target}`
-  );
-
-  if (state.count < state.target) {
-    return false;
+/**
+ * Store a message in Nitwit's local conversation memory.
+ */
+export function rememberNitwitMessage(message) {
+  if (!message?.channelId) {
+    return;
   }
 
-  state.count = 0;
-  state.target = randomMessageTarget();
-
-  console.log(
-    `Nitwit will reply again after ${state.target} messages.`
-  );
-
-  return true;
-}
-
-function randomItem(items) {
-  return items[
-    Math.floor(Math.random() * items.length)
-  ];
-}
-
-export function getMentionReply() {
-  return randomItem(
-    config.nitwit.mentionReplies
-  );
-}
-
-/**
- * Detect whether a message directly calls Nitwit.
- */
-export function isNitwitNameTrigger(message, client) {
   const content =
-    message.content?.toLowerCase() || '';
+    message.content?.trim();
 
-  const isMentioned =
-    message.mentions?.users?.has(client.user.id);
+  if (!content) {
+    return;
+  }
 
-  const usesName =
-    /\bnitwit\b/i.test(content);
+  if (!channelMessages.has(message.channelId)) {
+    channelMessages.set(
+      message.channelId,
+      []
+    );
+  }
 
-  return isMentioned || usesName;
+  const messages =
+    channelMessages.get(message.channelId);
+
+  messages.push({
+    author: message.author?.username || 'User',
+    content,
+    isBot: Boolean(message.author?.bot),
+    timestamp: Date.now()
+  });
+
+  // Keep only the latest messages.
+  if (
+    messages.length >
+    MAX_CONTEXT_MESSAGES
+  ) {
+    messages.splice(
+      0,
+      messages.length - MAX_CONTEXT_MESSAGES
+    );
+  }
 }
 
 /**
- * Checks whether the conversation contains useful context
- * worth sending to Groq.
+ * Get recent messages for a channel.
  */
-function hasUsefulContext(context) {
-  if (!Array.isArray(context) || context.length === 0) {
+function getNitwitContext(
+  channelId,
+  limit = 3
+) {
+  const messages =
+    channelMessages.get(channelId) || [];
+
+  return messages.slice(
+    Math.max(0, messages.length - limit)
+  );
+}
+
+/**
+ * Convert our local messages into the format
+ * expected by the Groq service.
+ */
+function formatContext(messages) {
+  return messages.map(message => ({
+    author: message.author,
+    content: message.content
+  }));
+}
+
+/**
+ * Check whether recent conversation actually
+ * contains something worth responding to.
+ */
+function hasUsefulContext(messages) {
+  if (
+    !Array.isArray(messages) ||
+    messages.length === 0
+  ) {
     return false;
   }
 
-  const ignoredMessages = new Set([
+  const ignored = new Set([
     'lol',
     'lmao',
     'haha',
@@ -113,65 +136,99 @@ function hasUsefulContext(context) {
     '???'
   ]);
 
-  let usefulMessages = 0;
+  let usefulCount = 0;
 
-  for (const item of context.slice(-3)) {
-    const content =
-      typeof item === 'string'
-        ? item
-        : item?.content || '';
-
-    const text = content
-      .trim()
-      .toLowerCase();
+  for (const message of messages) {
+    const text =
+      String(message.content || '')
+        .trim()
+        .toLowerCase();
 
     if (!text) {
       continue;
     }
 
-    if (ignoredMessages.has(text)) {
+    if (ignored.has(text)) {
       continue;
     }
 
-    // Ignore extremely short/random messages.
+    // Ignore extremely short messages.
     if (text.length < 4) {
       continue;
     }
 
-    // Ignore messages that are only emojis/punctuation.
-    const cleaned = text.replace(
-      /[\p{Emoji_Presentation}\p{Extended_Pictographic}\s!?.,]+/gu,
-      ''
-    );
+    // Remove emojis and punctuation.
+    const cleaned =
+      text.replace(
+        /[\p{Emoji_Presentation}\p{Extended_Pictographic}\s!?.,]+/gu,
+        ''
+      );
 
     if (!cleaned) {
       continue;
     }
 
-    usefulMessages++;
+    usefulCount++;
   }
 
-  return usefulMessages >= 1;
+  return usefulCount >= 1;
 }
 
 /**
- * Handles a direct @Nitwit / "nitwit" request.
- *
- * Uses Groq only when the recent conversation
- * contains useful context.
+ * Determine whether the message calls Nitwit.
  */
-export async function replyToNitwitMention(message) {
-  try {
-    const context = getRecentMessages(
-      message.channelId,
-      3
+export function isNitwitNameTrigger(
+  message,
+  client
+) {
+  const content =
+    message.content?.toLowerCase() || '';
+
+  const mentioned =
+    message.mentions?.users?.has(
+      client.user.id
     );
+
+  const named =
+    /\bnitwit\b/i.test(content);
+
+  return mentioned || named;
+}
+
+/**
+ * Handle @Nitwit / "nitwit" messages.
+ *
+ * Uses the current message + up to 2 previous
+ * messages when useful context exists.
+ */
+export async function replyToNitwitMention(
+  message
+) {
+  try {
+    const allMessages =
+      getNitwitContext(
+        message.channelId,
+        3
+      );
 
     console.log(
-      `Nitwit mention: found ${context.length} recent message(s).`
+      `Nitwit mention: found ${allMessages.length} recent message(s).`
     );
 
-    if (!hasUsefulContext(context)) {
+    // Need at least 2 messages so Nitwit has
+    // an actual conversation to understand.
+    if (allMessages.length < 2) {
+      console.log(
+        'Nitwit mention: not enough context, using preset reply.'
+      );
+
+      return {
+        reply: getMentionReply(),
+        usedAI: false
+      };
+    }
+
+    if (!hasUsefulContext(allMessages)) {
       console.log(
         'Nitwit mention: no useful context, using preset reply.'
       );
@@ -185,6 +242,9 @@ export async function replyToNitwitMention(message) {
     console.log(
       'Nitwit mention: useful context found, using Groq.'
     );
+
+    const context =
+      formatContext(allMessages);
 
     const reply =
       await generateNitwitReply(context);
@@ -203,7 +263,7 @@ export async function replyToNitwitMention(message) {
 
   } catch (error) {
     console.error(
-      'Nitwit mention context error:',
+      'Nitwit mention error:',
       error
     );
 
@@ -214,37 +274,91 @@ export async function replyToNitwitMention(message) {
   }
 }
 
-export async function maybeAutoReply(message) {
-  if (!shouldAutoReply(message.channelId)) {
+/**
+ * Random 5–10 message auto-reply.
+ */
+function shouldAutoReply(channelId) {
+  const state =
+    getChannelState(channelId);
+
+  state.count++;
+
+  console.log(
+    `Nitwit counter [${channelId}]: ${state.count}/${state.target}`
+  );
+
+  if (
+    state.count <
+    state.target
+  ) {
+    return false;
+  }
+
+  // Reset immediately for the next cycle.
+  state.count = 0;
+  state.target =
+    randomMessageTarget();
+
+  console.log(
+    `Nitwit will reply again after ${state.target} messages.`
+  );
+
+  return true;
+}
+
+export function getMentionReply() {
+  return randomItem(
+    config.nitwit.mentionReplies
+  );
+}
+
+function randomItem(items) {
+  return items[
+    Math.floor(
+      Math.random() * items.length
+    )
+  ];
+}
+
+/**
+ * Automatic AI reply every 5–10 messages.
+ */
+export async function maybeAutoReply(
+  message
+) {
+  if (
+    !shouldAutoReply(
+      message.channelId
+    )
+  ) {
     return null;
   }
 
-  const context = getRecentMessages(
-    message.channelId,
-    config.nitwit.contextMessages
+  const context =
+    getNitwitContext(
+      message.channelId,
+      config.nitwit.contextMessages || 5
+    );
+
+  console.log(
+    `Nitwit auto-reply: found ${context.length} message(s).`
   );
 
   if (!context.length) {
     console.log(
-      'Nitwit: no conversation history found.'
+      'Nitwit auto-reply: no context available.'
     );
 
     return null;
   }
 
-  console.log(
-    `Nitwit auto-reply: using ${context.length} message(s).`
-  );
-
   try {
     const reply =
-      await generateNitwitReply(context);
+      await generateNitwitReply(
+        formatContext(context)
+      );
 
-    if (!reply) {
-      return null;
-    }
-
-    return reply;
+    return reply || null;
 
   } catch (error) {
     console.error(
@@ -256,13 +370,17 @@ export async function maybeAutoReply(message) {
   }
 }
 
+/**
+ * /nitwit command.
+ */
 export async function forceReplyToCurrentContext(
   channel
 ) {
-  const context = getRecentMessages(
-    channel.id,
-    config.nitwit.contextMessages
-  );
+  const context =
+    getNitwitContext(
+      channel.id,
+      config.nitwit.contextMessages || 5
+    );
 
   console.log(
     `Nitwit /nitwit: found ${context.length} message(s).`
@@ -274,7 +392,9 @@ export async function forceReplyToCurrentContext(
 
   try {
     const reply =
-      await generateNitwitReply(context);
+      await generateNitwitReply(
+        formatContext(context)
+      );
 
     return (
       reply ||
