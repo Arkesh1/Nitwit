@@ -175,42 +175,54 @@ client.on(
      * hey nitwit
      * what does nitwit think?
      */
-    const isNitwitMentioned =
-      message.mentions.users.has(
-        client.user.id
-      ) ||
-      /\bnitwit\b/i.test(
-        message.content
-      );
+const isNitwitMentioned =
+  message.mentions.users.has(
+    client.user.id
+  );
 
-    /*
-     * Direct Nitwit requests get priority.
-     *
-     * replyToNitwitMention() decides:
-     *
-     * Useful context -> Groq AI
-     * No useful context -> preset reply
-     */
-    if (isNitwitMentioned) {
-      const result =
-        await replyToNitwitMention(
-          message
-        );
-
-      await message.reply({
-        content: result.reply,
-        allowedMentions: {
-          repliedUser: false
-        }
-      }).catch(error =>
-        console.error(
-          'Mention reply failed:',
-          error
-        )
-      );
-
-      return;
+// @Nitwit = ALWAYS preset reply
+if (isNitwitMentioned) {
+  await message.reply({
+    content: getMentionReply(),
+    allowedMentions: {
+      repliedUser: false
     }
+  }).catch(error =>
+    console.error(
+      'Mention reply failed:',
+      error
+    )
+  );
+
+  return;
+}
+
+// Any message containing "nitwit" = AI
+const isNitwitNameTrigger =
+  /\bnitwit\b/i.test(
+    message.content || ''
+  );
+
+if (isNitwitNameTrigger) {
+  const result =
+    await replyToNitwitMention(
+      message
+    );
+
+  await message.reply({
+    content: result.reply,
+    allowedMentions: {
+      repliedUser: false
+    }
+  }).catch(error =>
+    console.error(
+      'Nitwit AI reply failed:',
+      error
+    )
+  );
+
+  return;
+}
 
     /*
      * Automatic AI replies only happen
